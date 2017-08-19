@@ -3,8 +3,12 @@
 #include <AndroidAccessory.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Usb.h>
 
-AndroidAccessory acc("Arduino", "Mega_ADK", "X", "1.0", "X", "X");
+//#define ENABLE_UHS_DEBUGGING 1
+//#define DEBUG_USB_HOST 1
+
+AndroidAccessory acc("Arduino", "Mega_ADK", "Description", "1.0", "X", "X");
 
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
@@ -38,7 +42,7 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 
 void setup()   {                
   Serial.begin(115200);
-  acc.powerOn();
+  Serial.println("Setting up display");
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3D (for the 128x64)
   // init done
   pinMode(LED_PIN, OUTPUT);
@@ -48,6 +52,9 @@ void setup()   {
   display.clearDisplay();
   display.display();
   delay(2000);
+  acc.powerOn();
+  delay(2000);
+
 }
 
 

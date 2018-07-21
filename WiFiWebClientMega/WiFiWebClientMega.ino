@@ -1,19 +1,27 @@
-
 #include <SPI.h>
 #include <WiFi.h>
 
 #include <Adafruit_MQTT.h>
 #include <Adafruit_MQTT_Client.h>
 
+#include <AFMotor.h>
+
+
 #define LED_BLUE 13  
 
-char ssid[] = "guest-SDUHSD"; //  your network SSID (name)
-char pass[] = "guest-SDUHSD";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "guest-SDUHSD"; //  your network SSID (name)
+//char pass[] = "guest-SDUHSD";    // your network password (use for WPA, or use as key for WEP
+char ssid[] = "Mauro Wi-Fi Network"; //  your network SSID (name)
+char pass[] = "Maggie4848147";    // your network password (use for WPA, or use as key for WEP)
+
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int status = WL_IDLE_STATUS;
 
 WiFiClient client;
+
+AF_DCMotor motor(1, MOTOR12_64KHZ);
+
 
 
 /************************* Adafruit.io Setup *********************************/
@@ -30,6 +38,8 @@ Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO
 /****************************** Feeds ***************************************/
 // Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
 Adafruit_MQTT_Subscribe testLED = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/testLED");
+Adafruit_MQTT_Subscribe motorForward = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/motorForward");
+Adafruit_MQTT_Subscribe motorReverse = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/motorReverse");
 
 
 void setup() {
@@ -62,9 +72,12 @@ void setup() {
   printWifiStatus();
 
 
-  //Setup the MQTT subscription
+  //Setup the MQTT subscriptions
   Serial.println("Setting up MQTT subscription");
   mqtt.subscribe(&testLED);
+  mqtt.subscribe(&motorForward);
+  mqtt.subscribe(&motorReverse);
+
 }
 
 void loop() {
@@ -83,11 +96,39 @@ void loop() {
       
       if (strcmp((char *)testLED.lastread, "ON") == 0) {
         digitalWrite(LED_BLUE, HIGH); 
+        motor.setSpeed(255);
+        motor.run(FORWARD);
       }
       if (strcmp((char *)testLED.lastread, "OFF") == 0) {
         digitalWrite(LED_BLUE, LOW); 
+        motor.run(RELEASE);
+
       }
     }
+    
+    if (subscription == &motorForward) {
+      //Stop motor if already running, move forward 1sec
+      motor.run(RELEASE);
+      motor.setSpeed(255);
+      motor.run(FORWARD);
+      Serial.println("Motor forward for 1sec");
+      delay(1000);
+      motor.run(RELEASE);
+      Serial.println("Motor stopped");
+    }
+    
+    if (subscription == &motorReverse) {
+      //Stop motor if already running, move reverse 1sec
+      motor.run(RELEASE);
+      motor.setSpeed(255);
+      motor.run(BACKWARD);
+      Serial.println("Motor reverse for 1sec");
+      delay(1000);
+      motor.run(RELEASE);
+      Serial.println("Motor stopped");
+    }
+    
+    
   }
   
 //    Serial.println("Pinging the server");
@@ -170,8 +211,5 @@ void pingTheServer() {
   }
   
 }
-
-
-
 
 

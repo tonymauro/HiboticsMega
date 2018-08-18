@@ -5,9 +5,28 @@
 #include <Adafruit_MQTT_Client.h>
 
 #include <AFMotor.h>
+#include <Servo.h>
 
 
 #define LED_BLUE 13  
+#define HALL_MARKER_SAMPLE_INTERVAL 10  //ms
+#define MOTOR_MOVE_TIME HALL_MARKER_SAMPLE_INTERVAL*200 //ms - MUST BE AN MULTIPLE OF HALL_MARKER_SAMPLE_INTERVAL
+
+// TODO: ******** NEED TO HAVE A LOWER THRESHOLD FOR OTHER POLARITY OF MAGNET!!!!!!!! (will be lower)  **********
+#define HALL_DETECT_THRESHOLD 500 
+
+//#define CHASSIS4P0V1
+#define CHASSIS5P0V1
+
+#ifdef CHASSIS4P0V1
+//Configure drive motor for 4.0V1 chassis or 5.0V1 chassis
+AF_DCMotor driveMotor(1, MOTOR12_64KHZ); //For chassis version 4.0V1
+#endif
+
+#ifdef CHASSIS5P0V1
+AF_DCMotor driveMotor(3, MOTOR12_64KHZ);//For chassis version 5.0V1
+#endif
+
 
 //char ssid[] = "guest-SDUHSD"; //  your network SSID (name)
 //char pass[] = "guest-SDUHSD";    // your network password (use for WPA, or use as key for WEP
@@ -20,7 +39,25 @@ int status = WL_IDLE_STATUS;
 
 WiFiClient client;
 
-AF_DCMotor motor(1, MOTOR12_64KHZ);
+
+//Servo variables
+Servo XYservo;
+int XYservoPosition = 0;
+Servo Zservo;
+int ZservoPosition = 90;
+
+
+
+
+
+int  hallSensorPin  =  A7;    // Hall effect analog input pin
+int  hallSensorValue =  0;    // hall effect variable
+///Setup bools so know what direction last traveled when detected Hall marker
+//TODO:  make this persistent over power cycles
+bool foundHallMarkerOnFwdMove = false;
+bool foundHallMarkerOnRevMove = false;
+
+
 
 
 
@@ -46,6 +83,13 @@ void setup() {
   //Initialize serial and wait for port to open:
   Serial.begin(9600);
   pinMode(LED_BLUE, OUTPUT);  
+
+  XYservo.attach(9);  //Corresponds to SERVO_2 on motor shield
+  XYservo.write(XYservoPosition);
+  Zservo.attach(10);  //Corresponds to SER1 on motor shield
+  Zservo.write(ZservoPosition);
+
+
 
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
@@ -83,6 +127,21 @@ void setup() {
 void loop() {
 
    MQTT_connect();
+   hallSensorValue =  analogRead(hallSensorPin);
+   Serial.print("Hall value (loop): ");  Serial.println(hallSensorValue);
+
+
+   //Rotate the servos for the 3-axis phone holder
+   Serial.println("Rotating servo postive");
+   for (XYservoPosition = 0; XYservoPosition <=180; XYservoPosition++){
+      XYservo.write(XYservoPosition);
+      delay(10);
+   }
+   Serial.println("Rotating servo negative");
+   for (XYservoPosition = 180; XYservoPosition >=0; XYservoPosition--){
+      XYservo.write(XYservoPosition);
+      delay(10);
+   }
 
   // this is our 'wait for incoming subscription packets' busy subloop
   // readSubscription (int16_t timeout)
@@ -96,35 +155,78 @@ void loop() {
       
       if (strcmp((char *)testLED.lastread, "ON") == 0) {
         digitalWrite(LED_BLUE, HIGH); 
-        motor.setSpeed(255);
-        motor.run(FORWARD);
       }
       if (strcmp((char *)testLED.lastread, "OFF") == 0) {
         digitalWrite(LED_BLUE, LOW); 
-        motor.run(RELEASE);
 
       }
     }
     
     if (subscription == &motorForward) {
-      //Stop motor if already running, move forward 1sec
-      motor.run(RELEASE);
-      motor.setSpeed(255);
-      motor.run(FORWARD);
-      Serial.println("Motor forward for 1sec");
-      delay(1000);
-      motor.run(RELEASE);
+      //Stop motor if already running, move forward
+      driveMotor.run(RELEASE);
+      foundHallMarkerOnRevMove = false;  //Reset the reverse marker detect flag
+
+      
+      //First check if trying to move past a hall marker in the same direction 
+      //as last detected the marker (can't do this!).
+      if(!foundHallMarkerOnFwdMove){
+        Serial.println("Motor forward");
+        driveMotor.setSpeed(255);
+        driveMotor.run(FORWARD);
+        delay(400);  //move once in case positioned on top of the magnet
+
+        for (int i = 0; i<MOTOR_MOVE_TIME; i+=HALL_MARKER_SAMPLE_INTERVAL) {
+          hallSensorValue =  analogRead(hallSensorPin);
+          Serial.print("Hall value: ");  Serial.println(hallSensorValue);
+          if (hallSensorValue > HALL_DETECT_THRESHOLD){
+            delay(HALL_MARKER_SAMPLE_INTERVAL);
+            foundHallMarkerOnFwdMove = false;
+          }
+          else {
+            foundHallMarkerOnFwdMove = true;
+            driveMotor.run(RELEASE);
+            Serial.println("Found a Hall marker!!!");
+            delay(500);
+            findTheHallMarker("forward"); //converge to the marker 
+            break;
+          }
+        }        
+      }
+      driveMotor.run(RELEASE);
       Serial.println("Motor stopped");
     }
     
     if (subscription == &motorReverse) {
-      //Stop motor if already running, move reverse 1sec
-      motor.run(RELEASE);
-      motor.setSpeed(255);
-      motor.run(BACKWARD);
-      Serial.println("Motor reverse for 1sec");
-      delay(1000);
-      motor.run(RELEASE);
+      //Stop motor if already running, move reverse
+      driveMotor.run(RELEASE);
+      foundHallMarkerOnFwdMove = false;  //Reset the forward marker detect flag
+
+      //First check if trying to move past a hall marker in the same direction 
+      //as last detected the marker (can't do this!).
+      if(!foundHallMarkerOnRevMove){
+        Serial.println("Motor reverse");
+        driveMotor.setSpeed(255);
+        driveMotor.run(BACKWARD);
+        delay(400);  //move once in case positioned on top of the magnet
+        for (int i = 0; i<MOTOR_MOVE_TIME; i+=HALL_MARKER_SAMPLE_INTERVAL) {
+          hallSensorValue =  analogRead(hallSensorPin);
+          Serial.print("Hall value: ");  Serial.println(hallSensorValue);
+          if (hallSensorValue > HALL_DETECT_THRESHOLD){
+            delay(HALL_MARKER_SAMPLE_INTERVAL);
+            foundHallMarkerOnRevMove = false;
+          }
+          else {
+            foundHallMarkerOnRevMove = true;
+            driveMotor.run(RELEASE);
+            Serial.println("Found a Hall marker!!!");
+            delay(500);
+            findTheHallMarker("reverse"); //connverge to the marker
+            break;
+          }
+        }     
+      }
+      driveMotor.run(RELEASE);
       Serial.println("Motor stopped");
     }
     
@@ -144,7 +246,7 @@ void loop() {
 
   printWifiStatus();
 
-}
+} //End Loop
 
 
 void printWifiStatus() {
@@ -181,7 +283,8 @@ void MQTT_connect() {
 
   Serial.print("Connecting to MQTT... ");
 
-  uint8_t retries = 3;
+  uint8_t retries = 10; 
+  uint8_t savedRetries = retries;
   while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
        Serial.println(mqtt.connectErrorString(ret));
        Serial.print("Error code: "); Serial.println(ret);
@@ -191,7 +294,7 @@ void MQTT_connect() {
        retries--;
        if (retries == 0) {
          // basically die and wait for WDT to reset me
-         Serial.println("Tried to connect 3 times and Failed - Need to reset");
+         Serial.print("Tried to connect "); Serial.print (savedRetries); Serial.println(" times and Failed - Need to reset");
          while (1);
        }
   }
@@ -210,6 +313,39 @@ void pingTheServer() {
     Serial.println(" ms");
   }
   
+}
+
+//Converge to the Hall marker (magnet)
+void findTheHallMarker(String directionComingFrom){
+  driveMotor.setSpeed(255);
+  if(directionComingFrom.equals("forward")){
+    driveMotor.run(BACKWARD);
+    while(hallSensorValue =  analogRead(hallSensorPin) > HALL_DETECT_THRESHOLD)
+      delay(10);  
+              
+    driveMotor.run(FORWARD);
+    while(hallSensorValue =  analogRead(hallSensorPin) > HALL_DETECT_THRESHOLD)
+      delay(10);    
+
+    driveMotor.run(BACKWARD);
+    while(hallSensorValue =  analogRead(hallSensorPin) > HALL_DETECT_THRESHOLD)
+      delay(10);                          
+  }
+  else{
+    driveMotor.run(FORWARD);
+    while(hallSensorValue =  analogRead(hallSensorPin) > HALL_DETECT_THRESHOLD)
+      delay(10);  
+              
+    driveMotor.run(BACKWARD);
+    while(hallSensorValue =  analogRead(hallSensorPin) > HALL_DETECT_THRESHOLD)
+      delay(10);    
+
+    driveMotor.run(FORWARD);
+    while(hallSensorValue =  analogRead(hallSensorPin) > HALL_DETECT_THRESHOLD)
+      delay(10);                          
+  }
+  driveMotor.run(RELEASE);
+  Serial.println("Converged to the Hall marker");
 }
 
 

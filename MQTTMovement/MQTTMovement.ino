@@ -9,8 +9,10 @@
 
 #define LED_BLUE 13  
 
-char ssid[] = "guest-SDUHSD"; //  your network SSID (name)
-char pass[] = "guest-SDUHSD";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "guest-SDUHSD"; //  your network SSID (name)
+//char pass[] = "guest-SDUHSD";    // your network password (use for WPA, or use as key for WEP)
+char ssid[] = "Mauro Wi-Fi Network";
+char pass[] = "Maggie4848147";   
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 char mqtt_server = "m10.cloudmqtt.com:15345";
@@ -62,7 +64,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       motor.setSpeed(50);
       motor.run(BACKWARD);
     }else{
-      motor.run(RELEASE):
+      motor.run(RELEASE);
     }
   }
   

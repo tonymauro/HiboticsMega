@@ -15,8 +15,8 @@
 // TODO: ******** NEED TO HAVE A LOWER THRESHOLD FOR OTHER POLARITY OF MAGNET!!!!!!!! (will be lower)  **********
 #define HALL_DETECT_THRESHOLD 500 
 
-//#define CHASSIS4P0V1
-#define CHASSIS5P0V1
+#define CHASSIS4P0V1
+//#define CHASSIS5P0V1
 
 #ifdef CHASSIS4P0V1
 //Configure drive motor for 4.0V1 chassis or 5.0V1 chassis
@@ -84,10 +84,14 @@ void setup() {
   Serial.begin(9600);
   pinMode(LED_BLUE, OUTPUT);  
 
+
+//********************
+/* This code is buggy -- destroys the wifi comm link for some reason....
   XYservo.attach(9);  //Corresponds to SERVO_2 on motor shield
   XYservo.write(XYservoPosition);
   Zservo.attach(10);  //Corresponds to SER1 on motor shield
-  Zservo.write(ZservoPosition);
+  Zservo.write(ZservoPosition); */
+//********************
 
 
 
@@ -132,6 +136,8 @@ void loop() {
 
 
    //Rotate the servos for the 3-axis phone holder
+   /* This code is buggy -- destroys the wifi comm link for some reason....
+
    Serial.println("Rotating servo postive");
    for (XYservoPosition = 0; XYservoPosition <=180; XYservoPosition++){
       XYservo.write(XYservoPosition);
@@ -141,7 +147,7 @@ void loop() {
    for (XYservoPosition = 180; XYservoPosition >=0; XYservoPosition--){
       XYservo.write(XYservoPosition);
       delay(10);
-   }
+   } */
 
   // this is our 'wait for incoming subscription packets' busy subloop
   // readSubscription (int16_t timeout)
